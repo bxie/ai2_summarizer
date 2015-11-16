@@ -9,6 +9,8 @@
 # * not component_method, but Canvas.DrawLine
 # * not component_set_get, but Label.GetText, Label.SetText
 
+# Version as of 2015/11/15 handling old style formatting
+
 import os
 import os.path
 import json
@@ -171,7 +173,7 @@ def bkyToSummary(zippedFile, bkyFileName, projectPath):
       for child in rootElt:
           if child.tag == 'block':
               type = child.attrib['type']
-              top.append(blockType(child)) # [lyn, 2015/11/11] Specially handle component_event, component_method, component_set_get
+              top.append(blockType(child, zippedFile, bkyFileName)) # [lyn, 2015/11/11] Specially handle component_event, component_method, component_set_get
               component_selector = False
               for grandchild in child:
                   if grandchild.tag == 'title' or grandchild.tag =='field':
@@ -186,14 +188,14 @@ def bkyToSummary(zippedFile, bkyFileName, projectPath):
                  type == 'procedures_callnoreturn' or \
                  type == 'procedures_callreturn' or \
                  type[:-4] == 'lexical_variable':
-                  listOfBlocks += findBlockInfo(child)
+                  listOfBlocks += findBlockInfo(child, zippedFile, bkyFileName)
               # [lyn, 2015/11/11]: I'm confused by the following special case. Why is it here? 
               # It allows top-level component_method and component_set_get blocks to 
               # be considered nonorphans. But they *should* be orphans!
               elif component_selector:
-                  listOfBlocks += findBlockInfo(child)
+                  listOfBlocks += findBlockInfo(child, zippedFile, bkyFileName)
               else:
-                  listOfOrphans += findBlockInfo(child)
+                  listOfOrphans += findBlockInfo(child, zippedFile, bkyFileName)
       if len(listOfBlocks) == 0:
           blocks = 'NO ACTIVE BLOCKS'
       else:
@@ -233,9 +235,9 @@ def sortToDict(list):
             output[elt] += 1
     return output
 
-def findBlockInfo(xmlBlock):
+def findBlockInfo(xmlBlock, zippedFile, bkyFileName):
     blockDict = {}
-    type = blockType(xmlBlock) # [lyn, 2015/11/11] Specially handle component_event, component_method, component_set_get
+    type = blockType(xmlBlock, zippedFile, bkyFileName) # [lyn, 2015/11/11] Specially handle component_event, component_method, component_set_get [Maja, 2015/11/15] passing down zippedFile and bkyFileName to be able to handle old formatting
     blockDict['Type'] = type
     blockDict['Procedure Names'] = []
     blockDict['Procedure Parameter Names'] = []
@@ -266,10 +268,10 @@ def findBlockInfo(xmlBlock):
     for child in xmlBlock:
         for grandchild in child:
             if grandchild.tag == 'block':
-                subBlocks += findBlockInfo(grandchild)
+                subBlocks += findBlockInfo(grandchild, zippedFile, bkyFileName)
     return [blockDict] + subBlocks
 
-def blockType(xmlBlock):
+def blockType(xmlBlock, zippedFile, bkyFileName):
     type = xmlBlock.attrib['type']
     if type == 'component_event':
         for child in xmlBlock:
@@ -284,8 +286,32 @@ def blockType(xmlBlock):
             if child.tag == 'mutation':
                 return child.attrib['component_type'] + "." \
                        + child.attrib['set_or_get'].capitalize() + child.attrib['property_name']
+    elif type not in blockTypeDict.keys():
+        return upgradeFormat(type, zippedFile, bkyFileName) # [Maja, 2015/11/15] handles the old style formatting e.g. 'DrawingCanvas_Clicked' --> 'Canvas.Clicked'
     else:
         return type
+
+# [Maja, 2015/11/15]
+def upgradeFormat(type, zippedFile, bkyFileName):
+    action = type.split('_')[-1]
+    compType = findComponentType(type.split('_')[:-1], zippedFile, bkyFileName[:-4] + '.scm')
+    return str(compType) + '.' + str(action)
+
+def findComponentType(compName, zippedFile, scmfile):
+    ''' takes the component name, opens the .scm file, and finds the type of component '''
+    scmLines = linesFromZippedFile(zippedFile, scmfile)
+    if (len(scmLines) == 4
+        and scmLines[0].strip() == '#|'
+        and scmLines[1].strip() == '$JSON'
+        and scmLines[3].strip() == '|#'):
+        data = json.loads(scmLines[2])
+    for comp in data[u'Properties'][u'$Components']:
+        if comp[u'$Type'][-11:] == 'Arrangement':
+            for elt in comp[u'$Components']:
+                if str(elt[u'$Name']) == compName[0]:
+                    return elt[u'$Type']
+        elif str(comp[u'$Name']) == compName[0]:
+            return comp[u'$Type']
 
 def cleanup(dirName, fileType):
     for user in os.listdir(dirName):
@@ -296,9 +322,163 @@ def cleanup(dirName, fileType):
               if projectPath.endswith(fileType):
                   os.remove(projectPath)
 
-#cleanup('/Users/Maja/Documents/AI/ai2_users_random', '.zip')
-# projectToJSONFile('/Users/Maja/Documents/AI/ai2_users_random/000044/5893134367064064.zip')
+''' from jail.py '''
+blockTypeDict = {
+
+  # Component events                                                                                                    
+  'component_event': {'kind': 'declaration'},
+
+  # Component properties                                                                                                
+  # These are handled specially in determineKind, which does not check these entries for kind                           
+  'component_get': {'argNames': [], 'kind': 'expression'},
+  'component_set': {'argNames': ['VALUE'], 'kind': 'statement'},
+
+  # Component method calls                                                                                              
+  # These are handled specially in determineKind, which does not check these entries for kind                           
+  'component_method_call_expression': {'kind': 'expression'},
+  'component_method_call_statement': {'kind': 'statement'},
+
+  # Component value blocks (for generics)                                                                               
+  'component_component_block': {'argNames': [], 'kind': 'expression'},
+
+  # Variables                                                                                                          \
+                                                                                                                        
+  'global_declaration': {'argNames': ['VALUE'], 'kind': 'declaration'},
+  'lexical_variable_get': {'argNames': [], 'kind': 'expression'},
+  'lexical_variable_set': {'argNames': ['VALUE'], 'kind': 'statement'},
+  'local_declaration_statement': {'kind': 'statement'},
+  'local_declaration_expression': {'kind': 'expression'},
+ # Procedure declarations and calls                                                                                   \
+                                                                                                                        
+  'procedures_defnoreturn': {'kind': 'declaration'},
+  'procedures_defreturn': {'kind': 'declaration'},
+  'procedures_callnoreturn': {'kind': 'statement'},
+  'procedures_callreturn': {'kind': 'expression'},
+
+  # Control blocks
+                                                                                                                        
+  'controls_choose': {'argNames': ['TEST', 'THENRETURN', 'ELSERETURN'], 'kind': 'expression'},
+  'controls_if': {'kind': 'statement'}, # all sockets handled specially                                                 
+  'controls_eval_but_ignore': {'argNames':['VALUE'], 'kind': 'statement'},
+  'controls_forEach': {'argNames': ['LIST'], 'kind': 'statement'}, # body statement socket handled specially            
+  'controls_forRange': {'argNames': ['START', 'END', 'STEP'], 'kind': 'statement'}, # body statement socket handled specially
+  'controls_while': {'argNames': ['TEST'], 'kind': 'statement'}, # body statement socket handled specially              
+  'controls_do_then_return': {'kind': 'expression'}, # all sockets handled specially                                    
+
+  # Control ops on screen:                                                                                                             
+  'controls_closeApplication': {'argNames':[], 'kind': 'statement'},
+  'controls_closeScreen': {'argNames':[], 'kind': 'statement'},
+  'controls_closeScreenWithPlainText': {'argNames':['TEXT'], 'kind': 'statement'},
+  'controls_closeScreenWithValue': {'argNames':['SCREEN'], 'kind': 'statement'},
+  'controls_getPlainStartText': {'argNames':[], 'kind': 'expression'},
+  'controls_getStartValue': {'argNames':[], 'kind': 'expression'},
+  'controls_openAnotherScreen': {'argNames':['SCREEN'], 'kind': 'statement'},
+  'controls_openAnotherScreenWithStartValue': {'argNames':['SCREENNAME', 'STARTVALUE'], 'kind': 'statement'},
+
+  # Colors
+
+  'color_black': {'argNames': [], 'kind': 'expression'},
+  'color_blue': {'argNames': [], 'kind': 'expression'},
+  'color_cyan': {'argNames': [], 'kind': 'expression'},
+  'color_dark_gray': {'argNames': [], 'kind': 'expression'},
+  'color_light_gray': {'argNames': [], 'kind': 'expression'},
+  'color_gray': {'argNames': [], 'kind': 'expression'},
+  'color_green': {'argNames': [], 'kind': 'expression'},
+  'color_magenta': {'argNames': [], 'kind': 'expression'},
+  'color_orange': {'argNames': [], 'kind': 'expression'},
+  'color_pink': {'argNames': [], 'kind': 'expression'},
+  'color_red': {'argNames': [], 'kind': 'expression'},
+  'color_white': {'argNames': [], 'kind': 'expression'},
+  'color_yellow': {'argNames': [], 'kind': 'expression'},
+
+  # Color ops:                                                                                                         \
+                                                                                                                        
+  'color_make_color': {'argNames':['COLORLIST'], 'kind': 'expression'},
+  'color_split_color': {'argNames':['COLOR'], 'kind': 'expression'},
+
+  # Logic                                                                                                               
+  'logic_boolean': {'argNames': [], 'kind': 'expression'},
+  'logic_false': {'argNames': [], 'kind': 'expression'}, # Together with logic boolean                                  
+  'logic_compare': {'argNames': ['A', 'B'], 'kind': 'expression'},
+  'logic_negate': {'argNames': ['BOOL'], 'kind': 'expression'},
+  'logic_operation': {'argNames': ['A', 'B'], 'kind': 'expression'},
+  'logic_or': {'argNames': ['A', 'B'], 'kind': 'expression'}, # Together with logic_operation                           
+
+  # Lists                                                                                                               
+  'lists_create_with': {'expandableArgName': 'ADD', 'kind': 'expression'},
+  'lists_add_items': {'argNames': ['LIST'], 'expandableArgName':'ITEM', 'kind': 'statement'},
+  'lists_append_list': {'argNames': ['LIST0', 'LIST1'], 'kind': 'statement'},
+  'lists_copy': {'argNames': ['LIST'], 'kind': 'expression'},
+  'lists_insert_item': {'argNames': ['LIST', 'INDEX', 'ITEM'], 'kind': 'statement'},
+  'lists_is_list': {'argNames': ['ITEM'], 'kind': 'expression'},
+  'lists_is_in': {'argNames':['ITEM', 'LIST'], 'kind': 'expression'},
+  'lists_is_empty': {'argNames': ['LIST'], 'kind': 'expression'},
+  'lists_length': {'argNames':['LIST'], 'kind': 'expression'},
+  'lists_from_csv_row': {'argNames': ['TEXT'], 'kind': 'expression'},
+  'lists_to_csv_row': {'argNames': ['LIST'], 'kind': 'expression'},
+  'lists_from_csv_table': {'argNames': ['TEXT'], 'kind': 'expression'},
+  'lists_to_csv_table': {'argNames': ['LIST'], 'kind': 'expression'},
+  'lists_lookup_in_pairs': {'argNames': ['KEY', 'LIST', 'NOTFOUND'], 'kind': 'expression'},
+  'lists_pick_random_item': {'argNames':['LIST'], 'kind': 'expression'},
+  'lists_position_in': {'argNames':['ITEM', 'LIST'], 'kind': 'expression'},
+  'lists_select_item': {'argNames': ['LIST', 'NUM'], 'kind': 'expression'},
+  'lists_remove_item': {'argNames': ['LIST', 'INDEX'], 'kind': 'statement'},
+  'lists_replace_item': {'argNames': ['LIST', 'NUM', 'ITEM'], 'kind': 'statement'},
+
+  # Math
+
+  'math_number': {'argNames': [], 'kind': 'expression'},
+  'math_compare': {'argNames': ['A', 'B'], 'kind': 'expression'},
+  'math_add': {'expandableArgName': 'NUM', 'kind': 'expression'},
+  'math_add': {'expandableArgName': 'NUM', 'kind': 'expression'},
+  'math_multiply': {'expandableArgName': 'NUM', 'kind': 'expression'},
+  'math_subtract': {'argNames':['A', 'B'], 'kind': 'expression'},
+  'math_division': {'argNames':['A', 'B'], 'kind': 'expression'},
+  'math_power': {'argNames':['A', 'B'], 'kind': 'expression'},
+  'math_random_int': {'argNames':['FROM', 'TO'], 'kind': 'expression'},
+  'math_random_float': {'argNames':[], 'kind': 'expression'},
+  'math_random_set_seed': {'argNames':['NUM'], 'kind': 'statement'},
+  'math_single': {'argNames':['NUM'], 'kind': 'expression'},
+  'math_abs': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_single                                   
+  'math_neg': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_single                                   
+  'math_round': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_single                                 
+  'math_ceiling': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_single                               
+  'math_floor': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_single                                 
+  'math_divide': {'argNames':['DIVIDEND', 'DIVISOR'], 'kind': 'expression'},
+  'math_on_list': {'expandableArgName': 'NUM', 'kind': 'expression'},
+  'math_trig': {'argNames':['NUM'], 'kind': 'expression'},
+  'math_cos': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_trig                                     
+  'math_tan': {'argNames':['NUM'], 'kind': 'expression'}, # Together with math_trig                                     
+  'math_atan2': {'argNames':['Y', 'X'], 'kind': 'expression'},
+  'math_convert_angles': {'argNames':['NUM'], 'kind': 'expression'},
+  'math_format_as_decimal': {'argNames':['NUM', 'PLACES'], 'kind': 'expression'},
+  'math_is_a_number': {'argNames':['NUM'], 'kind': 'expression'},
+  'math_convert_number': {'argNames':['NUM'], 'kind': 'expression'},
+
+  # Strings/text                                                                                                       \
+                                                                                                                        
+  'text': {'argNames':[], 'kind': 'expression'},
+  'text_join': {'expandableArgName': 'ADD', 'kind': 'expression'},
+  'text_contains': {'argNames': ['TEXT', 'PIECE'], 'kind': 'expression'},
+  'text_changeCase': {'argNames': ['TEXT'], 'kind': 'expression'},
+  'text_isEmpty': {'argNames': ['VALUE'], 'kind': 'expression'},
+  'text_compare': {'argNames': ['TEXT1', 'TEXT2'], 'kind': 'expression'},
+  'text_length': {'argNames': ['VALUE'], 'kind': 'expression'},
+  'text_replace_all': {'argNames': ['TEXT', 'SEGMENT', 'REPLACEMENT'], 'kind': 'expression'},
+  'text_starts_at': {'argNames': ['TEXT', 'PIECE'], 'kind': 'expression'},
+  'text_split': {'argNames': ['TEXT', 'AT'], 'kind': 'expression'},
+  'text_segment': {'argNames': ['TEXT', 'START', 'LENGTH'], 'kind': 'expression'},
+  'text_trim': {'argNames': ['TEXT'], 'kind': 'expression'}
+
+}
+
+
+# Maja's tests
+# cleanup('/Users/Maja/Documents/AI/ai2_users_random', '.zip')
+# projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
 # allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 100008)
+# findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
+#print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 
 # Lyn's tests
 # cleanup('/Users/fturbak/Projects/AppInventor2Stats/data/benji_ai2_users_random', '.zip')
