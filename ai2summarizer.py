@@ -9,8 +9,11 @@
 # * not component_method, but Canvas.DrawLine
 # * not component_set_get, but Label.GetText, Label.SetText
 
+<<<<<<< HEAD
 # Version as of 2015/11/15 handling old style formatting
 
+=======
+>>>>>>> 146bc25b27c893e5129e8e08fc4ca68b9fb78916
 import os
 import os.path
 import json
@@ -235,6 +238,8 @@ def sortToDict(list):
             output[elt] += 1
     return output
 
+
+
 def findBlockInfo(xmlBlock, zippedFile, bkyFileName):
     blockDict = {}
     type = blockType(xmlBlock, zippedFile, bkyFileName) # [lyn, 2015/11/11] Specially handle component_event, component_method, component_set_get [Maja, 2015/11/15] passing down zippedFile and bkyFileName to be able to handle old formatting
@@ -312,6 +317,7 @@ def findComponentType(compName, zippedFile, scmfile):
                     return elt[u'$Type']
         elif str(comp[u'$Name']) == compName[0]:
             return comp[u'$Type']
+
 
 def cleanup(dirName, fileType):
     for user in os.listdir(dirName):
@@ -479,6 +485,7 @@ blockTypeDict = {
 # allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 100008)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 #print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
+
 
 # Lyn's tests
 # cleanup('/Users/fturbak/Projects/AppInventor2Stats/data/benji_ai2_users_random', '.zip')
