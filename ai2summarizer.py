@@ -9,11 +9,9 @@
 # * not component_method, but Canvas.DrawLine
 # * not component_set_get, but Label.GetText, Label.SetText
 
-<<<<<<< HEAD
+
 # Version as of 2015/11/15 handling old style formatting
 
-=======
->>>>>>> 146bc25b27c893e5129e8e08fc4ca68b9fb78916
 import os
 import os.path
 import json
@@ -479,8 +477,9 @@ blockTypeDict = {
 }
 
 
+
 # Maja's tests
-# cleanup('/Users/Maja/Documents/AI/ai2_users_random', '.zip')
+# cleanup('/Users/Maja/Documents/AI/ai2_users_random', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
 # allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 100008)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
