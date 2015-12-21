@@ -10,8 +10,6 @@
 # * not component_set_get, but Label.GetText, Label.SetText
 
 
-# Version as of 2015/11/15 handling old style formatting
-
 import os
 import os.path
 import json
