@@ -477,7 +477,7 @@ blockTypeDict = {
 
 
 # Maja's tests
-# cleanup('/Users/Maja/Documents/AI/ai2_users_random', 'summary.json')
+# cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
 # allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 100008)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
