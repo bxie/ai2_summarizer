@@ -63,10 +63,12 @@ def projectToJSON(projectPath):
         summary['**Project Name'] = findName(myZip)
         listOfScreens = findScreenNames(myZip)
         summary['*Number of Screens'] = len(listOfScreens)
+        media = []
         for screen in listOfScreens:
             screenInfo = screenToJSON(myZip, screen, projectPath)
-            summary[str(screen)] = screenInfo
-        summary['*Media Assets'] = findMedia(myZip)
+            summary[str(screen)] = screenInfo[0]
+            media += screenInfo[1]
+        summary['*Media Assets'] = list(set(media))
     return summary
 
 
@@ -81,12 +83,12 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
         fullFilename = pathlessFilename
     else:
         matches = filter(lambda name: name.endswith("/" + pathlessFilename), names)
-    if len(matches) == 1:
-        fullFilename = matches[0]
-    elif len(matches) == 0:
-        raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
-    else:
-        raise RuntimeError("linesFromZippedFile -- multiple matches for file named: "
+        if len(matches) == 1:
+            fullFilename = matches[0]
+        elif len(matches) == 0:
+            raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
+        else:
+            raise RuntimeError("linesFromZippedFile -- multiple matches for file named: "
                          + pathlessFilename
                          + "[" + ",".join(matches) + "]")
     return zippedFile.open(fullFilename).readlines()
@@ -94,14 +96,6 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
 def findName(zippedFile): 
     pp = linesFromZippedFile(zippedFile, 'project.properties') 
     return  pp[1][:-1].split('=')[1]
-
-def findMedia(zippedFile):
-    listOfMedia = []
-    for file in zippedFile.namelist():
-        if '.' in str(file):
-            if file.split('.')[1] != 'properties' and file.split('.')[1] != 'bky' and file.split('.')[1] != 'yail' and file.split('.')[1] != 'scm':
-                listOfMedia.append(file.split('/')[-1])
-    return listOfMedia
 
 def findScreenNames(zippedFile): 
     names = zippedFile.namelist()
@@ -114,7 +108,7 @@ def findScreenNames(zippedFile):
 def screenToJSON(zippedFile, screenName, projectPath):
     components = scmToComponents(zippedFile, screenName + '.scm')
     bky = bkyToSummary(zippedFile, screenName + '.bky', projectPath)
-    return {'Components': components, 'Blocks': bky}
+    return {'Components': components[0], 'Blocks': bky}, components[1] 
 
 def scmToComponents(zippedFile, scmFileName):
     scmLines = linesFromZippedFile(zippedFile, scmFileName)
@@ -125,6 +119,7 @@ def scmToComponents(zippedFile, scmFileName):
         data = json.loads(scmLines[2])
     strings = []
     components = {}
+    media = []
     if u'$Components' not in data[u'Properties'].keys():
         return 'NO COMPONENTS'
     else:
@@ -135,7 +130,25 @@ def scmToComponents(zippedFile, scmFileName):
                 components[component['$Type']] = 1
             if u'Text' in component.keys():
                 strings.append(component[u'Text'])
-    return {'Number of Components': len(components), 'Type and Frequency': components, 'Strings': strings}
+            media += findMedia(component)
+    return {'Number of Components': len(components), 'Type and Frequency': components, 'Strings': strings}, media
+
+def findMedia(component):
+    media = []
+    for elt in component.values():
+        if isinstance(elt, basestring) and len(elt.split('.')) == 2:
+            ext = elt.split('.')[1]
+            for key in component.keys():
+                if component[key] == elt and elt not in media and (key == 'Picture' or \
+                                                                       key == 'Image' or \
+                                                                       key == 'Source' or \
+                                                                       key == 'BackgroundImage' or \
+                                                                       key == 'ResponseFileName'): # theses were the only keys I found in any of the tutorials that had files as values. // Maja 2015/12/27
+                    media.append(elt)
+        elif isinstance(elt, list):
+            for comp in elt:
+                media += findMedia(comp)
+    return media
 
 def elementTreeFromLines(lines, projectPath):
     """ This function is designed to handle the following bad case: <xml xmlns="http://www.w3.org/1999/xhtml">
@@ -233,8 +246,6 @@ def sortToDict(list):
         else:
             output[elt] += 1
     return output
-
-
 
 def findBlockInfo(xmlBlock, zippedFile, bkyFileName):
     blockDict = {}
@@ -477,9 +488,9 @@ blockTypeDict = {
 
 
 # Maja's tests
-# cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
+# cleanup('/Users/Maja/Documents/AI/userprojects1', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
-# allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 100008)
+# allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 10)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 #print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 
