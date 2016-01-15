@@ -117,6 +117,8 @@ def scmToComponents(zippedFile, scmFileName):
         and scmLines[1].strip() == '$JSON'
         and scmLines[3].strip() == '|#'):
         data = json.loads(scmLines[2])
+    else:
+        data = json.loads(scmLines)
     strings = []
     components = {}
     media = []
@@ -191,20 +193,9 @@ def bkyToSummary(zippedFile, bkyFileName, projectPath):
                   if grandchild.tag == 'title' or grandchild.tag =='field':
                       if grandchild.attrib['name'] == 'COMPONENT_SELECTOR':
                           component_selector = True
-               # [lyn, 2015/11/11] Cleaned up formatting of following. 
-               #   Can be more cleanly written as a set membership test
-              if type == 'component_event' or \
-                 type  == 'global_declaration' or \
-                 type == 'procedures_defnoreturn' or \
-                 type == 'procedures_defreturn' or \
-                 type == 'procedures_callnoreturn' or \
-                 type == 'procedures_callreturn' or \
-                 type[:-4] == 'lexical_variable':
-                  listOfBlocks += findBlockInfo(child, zippedFile, bkyFileName)
-              # [lyn, 2015/11/11]: I'm confused by the following special case. Why is it here? 
-              # It allows top-level component_method and component_set_get blocks to 
-              # be considered nonorphans. But they *should* be orphans!
-              elif component_selector:
+              if type in ['component_event', 'global_declaration', 'procedures_defnoreturn', \
+                              'procedures_defreturn', 'procedures_callnoreturn', 'procedures_callreturn'] \
+                              or type[:-4] == 'lexical_variable':
                   listOfBlocks += findBlockInfo(child, zippedFile, bkyFileName)
               else:
                   listOfOrphans += findBlockInfo(child, zippedFile, bkyFileName)
@@ -488,9 +479,9 @@ blockTypeDict = {
 
 
 # Maja's tests
-# cleanup('/Users/Maja/Documents/AI/userprojects1', 'summary.json')
+# cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
-# allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 10)
+# allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 1000)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 #print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 
