@@ -7,6 +7,8 @@ from math import sqrt
 import json
 import unittest
 import os
+import matplotlib.pyplot as plt
+
 
 __author__='Maja'
 
@@ -20,28 +22,19 @@ class testing(unittest.TestCase):
         with open(testFile, 'r') as data_file:
             self.data = json.load(data_file)
             data_file.close()
-        self.assertEqual(numTopLevelBlocks(self.data), [('numTopLevelBlocks', 2)])
         self.assertEqual(numMediaAssets(self.data), [('numMediaAssets', 0)])
-        self.assertEqual(numComponents(self.data), [('numComponents', 5)])
-        self.assertEqual(numActiveBlocks(self.data), [('numActiveBlocks', 3)])
-        self.assertEqual(numTypesBlocks(self.data), [('numTypesBlocks', 3)])
-        self.assertEqual(numTypesComponents(self.data), [('numTypesComponents', 5)])
-        self.assertEqual(numStrings(self.data), [('numStrings', 2)])
         self.assertEqual(numScreens(self.data), [('numScreens', 1)])
-        self.assertEqual(numGlobVar(self.data), [('numGlobVar', 0)])
-        self.assertEqual(numLocVar(self.data), [('numLocVar', 0)])
-        self.assertEqual(numProcNames(self.data), [('numProcNames', 0)])
-        self.assertEqual(numProcParNames(self.data), [('numProcParNames', 0)])
-        self.assertEqual(hasCamera(self.data), [('hasCamera', 0)])
-        self.assertEqual(hasCanvas(self.data), [('hasCanvas', 0)])
-
+        self.assertEqual(componentTypes(self.data)[0], ('hasCamera', 0))
+        self.assertEqual(numCompAndBlocks(self.data)[0], ('numStrings', 0))
+        self.assertEqual(blockTypes(self.data)[0], ('hasAboveRange', 0))
 
     def testBuildTrainer(self):
-        self.assertEqual(buildTrainingVectors(combineMany([numTopLevelBlocks]), testDir, 5)[0]\
-                             , ('texttospeech', [('numTopLevelBlocks', 2)]))
-
+        self.assertEqual(buildTrainingVectors(combineMany([numScreens]), testDir, 5)[0]\
+                             , ('texttospeech', [('numScreens', 1)]))
+        
+        
     def testCombine(self):
-        lengthFirst = combineMany([numTopLevelBlocks, numMediaAssets, numComponents])
+        lengthFirst = combineMany([numMediaAssets, numScreens])
 
 # featureFuncs helpers
 # enabling iteration over screens for information located in either 2nd or 
@@ -51,7 +44,7 @@ def findNum2(JSON, a, b):
     result = 0
     for x in [key for key in JSON.keys() if key[0] != '*']:
         if JSON[x][a] == 'N' or JSON[x][a] == 'NO ACTIVE COMPONENTS':
-            result += 0
+            pass
         elif isinstance(JSON[x][a][b], int):
             result += JSON[x][a][b]
         else:
@@ -62,7 +55,7 @@ def findNum3(JSON, a, b, c):
     result = 0
     for x in [key for key in JSON.keys() if key[0] != '*']:
         if JSON[x][a][b] == 'NO ACTIVE BLOCKS':
-            result += 0
+            pass
         elif isinstance(JSON[x][a][b][c], int):
             result += JSON[x][a][b][c]
         else:
@@ -70,56 +63,95 @@ def findNum3(JSON, a, b, c):
     return result
 
 def hasComponent(JSON, component):
+    result = 0
     for x in [key for key in JSON.keys() if key[0] != '*']:
         if JSON[x]['Components'] == 'N':
             pass
         elif component in JSON[x]['Components']['Type and Frequency'].keys():
-            return True
-    return False
+            result += JSON[x]['Components']['Type and Frequency'][component]
+    return result
 
-# featureFuncs
-
-def numTopLevelBlocks(JSON):
-    return [('numTopLevelBlocks', findNum2(JSON, 'Blocks', '*Top Level Blocks'))]
+# feature functions 
 
 def numMediaAssets(JSON):
     return [('numMediaAssets', len(JSON['*Media Assets']))]
 
-def numComponents(JSON):
-    return [('numComponents', findNum2(JSON, 'Components', 'Number of Components'))]
-
-def numTypesComponents(JSON):
-    return [('numTypesComponents', findNum2(JSON, 'Components', 'Type and Frequency'))]
-
-def numActiveBlocks(JSON):
-    return [('numActiveBlocks', findNum3(JSON, 'Blocks', 'Active Blocks', '*Number of Blocks'))]
-
-def numTypesBlocks(JSON):
-    return [('numTypesBlocks', findNum3(JSON, 'Blocks', 'Active Blocks', 'Types'))]
-
 def numScreens(JSON):
     return [('numScreens', JSON['*Number of Screens'])]
 
-def numStrings(JSON):
-    return [('numStrings', findNum3(JSON, 'Blocks', 'Active Blocks', 'Strings') + findNum2(JSON, 'Components', 'Strings'))]
+def numCompAndBlocks(JSON):
+    result = []
+    # featList = [(Feature, (path to feature beyond screen name))]
+    featList = [('Strings', ('Blocks', 'Active Blocks', 'Strings')), \
+                    ('GlobVar', ('Blocks', 'Active Blocks', 'Global Variable Names')), \
+                    ('LocVar', ('Blocks', 'Active Blocks', 'Local Variable Names')), \
+                    ('ProcNames',('Blocks', 'Active Blocks', 'Procedure Names')), \
+                    ('ProcParNames', ('Blocks', 'Active Blocks', 'Procedure Parameter Names')), \
+                    ('TypesBlocks', ('Blocks', 'Active Blocks', 'Types')), \
+                    ('ActiveBlocks', ('Blocks', 'Active Blocks', '*Number of Blocks')), \
+                    ('TypesComponents', ('Components', 'Type and Frequency')), \
+                    ('Components', ('Components', 'Number of Components')), \
+                    ('TopLevelBlocks', ('Blocks', '*Top Level Blocks'))]
+    for feature in featList:
+        if len(feature[1]) == 3:
+            result += [('num'+str(feature[0]), findNum3(JSON, feature[1][0], feature[1][1], feature[1][2]))]
+        elif len(feature[1]) == 2:
+            result += [('num'+str(feature[0]), findNum2(JSON, feature[1][0], feature[1][1]))]
+    return result
 
-def numGlobVar(JSON):
-    return [('numGlobVar', findNum3(JSON, 'Blocks', 'Active Blocks', 'Global Variable Names'))]
+def componentTypes(JSON):
+    compList = ['Camera', 'Canvas', 'Button', 'HorizontalArrangement', 'VerticalArrangement', \
+                    'Sound', 'TinyDB', 'LocationSensor', 'Clock', 'PhoneCall', 'Notifier', \
+                    'ActivityStarter', 'Label', 'ListPicker', 'PhoneNumberPicker', \
+                    'WebViewer', 'Image', 'TextBox', 'TextToSpeech', 'AccelerometerSensor', 'NearField', \
+                    'Web', 'Player', 'BluetoothClient', 'BluetoothServer', 'VideoPlayer', 'ImagePicker', \
+                    'File', 'ListView', 'DatePicker', 'TimePicker', 'CheckBox', 'Slider', 'PasswordTextBox', \
+                    'Spinner', 'TableArrangement', 'YandexTranslate', 'Camcorder', 'SpeechRecognizer', 'SoundRecorder' \
+                    'ImageSprite', 'Ball', 'OrientationSensor', 'ProximitySensor', 'EmailPicker', 'Texting', \
+                    'Sharing', 'Twitter', 'ContactPicker', 'FusiontablesControl', 'TinyWebDB', \
+                    'NxtDrive', 'NxtColorSensor', 'NxtLightSensor', 'NxtSoundSensor', \
+                    'NxtTouchSensor', 'NxtUltrasonicSensor', 'NxtDirectCommands']
+    result = []
+    for comp in compList:
+        result += [(str('has'+comp), hasComponent(JSON, comp)*3)] # WEIGHED
+    return result
 
-def numLocVar(JSON):
-    return [('numLocVar', findNum3(JSON, 'Blocks', 'Active Blocks', 'Local Variable Names'))]
-
-def numProcNames(JSON):
-    return [('numProcNames', findNum3(JSON, 'Blocks', 'Active Blocks', 'Procedure Names'))]
-
-def numProcParNames(JSON):
-    return [('numProcParNames', findNum3(JSON, 'Blocks', 'Active Blocks', 'Procedure Parameter Names'))]
-
-def hasCamera(JSON):
-    return [('hasCamera', int(hasComponent(JSON, 'Camera')))]
-
-def hasCanvas(JSON):
-    return [('hasCanvas', int(hasComponent(JSON, 'Canvas')))]
+def blockTypes(JSON):
+    result = []
+    blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActivity', \
+                     'AfterChoosing', 'AfterFileSaved', 'AfterGettingText', 'AfterPicking', \
+                     'AfterPicture', 'AfterRecording', 'AfterSelecting', 'AfterSoundRecorded', \
+                     'AfterScan', 'AfterSpeaking', 'AfterTextInput', 'AfterTimeSet', \
+                     'BeforeGettingText', 'BeforeSpeaking', 'BelowRange', 'Changed', 'Click',\
+                     'CollidedWith', 'ColorChanged', 'Completed', 'ConnectionAccepted', \
+                     'DirectMessagesReceived', 'Dragged', 'FollowersReceived', 'FriendTimelineReceived', \
+                     'GotFile', 'GotFocus', 'GotResult', 'GotText', 'GotTranslation', 'GotValue', \
+                     'IsAuthorized', 'LocationChanged', 'IncomingCallAnswered', 'LongClick', \
+                     'LostFocus', 'AccelerationChanged', 'Shaking', 'MentionsReceived', \
+                     'MessageReceived', 'Timer', 'Initialize', 'OrientationChanged', 'OtherPlayerStarted',\
+                     'PhoneCallEnded', 'PhoneCallStarted',  'NoLongerCollidingWith', 'PositionChanged', \
+                     'ProximityChanged', 'SearchSuccessful', 'StartedRecording', 'StatusChanged', \
+                     'StoppedRecording','TagRead', 'TagWritten',  'Touched', 'TouchDown', 'TouchUp', \
+                     'ValueStored', 'WebServiceError', 'WithinRange', 'EdgeReached', 'Flung',\
+                     'Pressed', 'Released']
+    blocks = {}
+    for x in [key for key in JSON.keys() if key[0] != '*']:
+        if JSON[x]['Blocks']['*Top Level Blocks'] == 'NO ACTIVE BLOCKS':
+            pass
+        else:
+            for key in JSON[x]['Blocks']['*Top Level Blocks']:
+                if '.' in key:
+                    activity = key.split('.')[1]
+                    if activity not in blocks.keys():
+                        blocks[activity] = JSON[x]['Blocks']['*Top Level Blocks'][key]
+                    else:
+                        blocks[activity] += JSON[x]['Blocks']['*Top Level Blocks'][key]
+    for block in blockList:
+         if block in blocks.keys():
+             result += [(str('has' + block), blocks[block])] #WEIGHED
+         else:
+             result += [(str('has' + block), 0)]
+    return result
 
 # combining function
 
@@ -137,7 +169,7 @@ def euclideanDistanceFrom(v):
         def squareDiff(i):
             """square of difference between elements in ith position of vectors v and w"""
             return (v[1][i][1] - w[i][1])**2
-        return sqrt(sum(map(squareDiff, range(len(v)))))
+        return sqrt(sum(map(squareDiff, range(len(v[1])))))
     return euclideanDistanceHelper
 
 def buildTrainingVectors(featurefunc, dirName, numUsers):
@@ -170,7 +202,7 @@ def closestTutorial(projectPath, tutorials, featurefunc, numtut):
     '''returns a tuple of (projectpath, (name of closest tutorial, distance))'''
     test = summarytofeature(projectPath, featurefunc)
     training = buildTrainingVectors(featurefunc, tutorials, numtut)
-    return (projectPath, labelsSortedByDistance(test, training)[0])
+    return (projectPath, labelsSortedByDistance(test, training)[:50])
 
 def findsummaries(dirName, numUsers):
     '''returns a list of JSON summaries from a directory'''
@@ -193,28 +225,41 @@ def bestMatches(tutorialDir, numtut, projectDir, numPro, featurefunc):
 def filterMatches(bestMatches, bar):
     results = []
     for project in bestMatches:
-        if project[1][1] <= 2.0:
+        if project[1][1] <= bar:
             results.append(project)
     return results
 
+def createPlot(closeTuts, numTuts):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    X = range(numTuts)
+    Y = [x[1] for x in closeTuts[1][:numTuts]]
+    plt.plot(X, Y, 'ro')
+    plt.axis([-1, numTuts, 0, closeTuts[1][numTuts][1]])
+    plt.ylabel('Distance to Tutorials')
+    plt.title(closeTuts[0])
+    for i in range(numTuts):
+        xy = zip(X,[x[1] for x in closeTuts[1][:numTuts]])
+        ax.annotate(closeTuts[1][i][0], xy=xy[i])
+    plt.show()
 
 def main():
     """Runs the classification pipeline with command line arguments"""
-    #combi = combineMany([numActiveBlocks, numComponents, numTopLevelBlocks, numMediaAssets, numStrings, numScreens, numGlobVar, numLocVar, numProcNames, numProcParNames, hasCamera, hasCanvas])
-    
-#    randomProject = summarytofeature('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', combi)
-    #training =  buildTrainingVectors(combi, '/Users/Maja/Documents/AI/Tutorials', 100)
-#    combiDistance = labelsSortedByDistance(randomProject, training)
-#    combi = combineMany([numActiveBlocks, numComponents, numTopLevelBlocks, numMediaAssets, numStrings, numScreens, numGlobVar, numLocVar, numProcNames, numProcParNames])
-    #print closestTutorial('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/Tutorials', combi, 100)
+#    combi = combineMany([blockTypes, componentTypes, numMediaAssets, numScreens, numCompAndBlocks])
+   # randomProject = summarytofeature('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', combi)
+  #  training =  buildTrainingVectors(combi, '/Users/Maja/Documents/AI/ai2_users_random', 10)
+ #   combiDistance = labelsSortedByDistance(randomProject, training)
+#    print combiDistance
+#    print closestTutorial('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 100000)
     #findsummaries('/Users/Maja/Documents/AI/Tutorials', 100)
-    #bm = bestMatches('/Users/Maja/Documents/AI/Tutorials', 100, '/Users/Maja/Documents/AI/ai2_users_random', 20, combi)
-    #print filterMatches(bm, 2)
-
+#    bm = bestMatches('/Users/Maja/Documents/AI/Tutorials', 100, '/Users/Maja/Documents/AI/ai2_users_random', 5, combi)
+    #print filterMatches(bm, 8.0)
+#    createPlot(bm[-1], 25)
+    
 
 if __name__=='__main__':  # invoke main() when program is run
     
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(testing)
     unittest.TextTestRunner().run(suite)
     main()
-
+    
