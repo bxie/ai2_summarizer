@@ -1,5 +1,5 @@
 # Maja Svanberg
-# tutorialFinder.py
+# maja_eager.py
 # 2015-11-04
 # for the AI team
 

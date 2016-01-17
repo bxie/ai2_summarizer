@@ -1,7 +1,6 @@
 # Maja Svanberg
-# maja_tutorialFinder2.py
+# maja_lazy.py
 # 2016-01-08
-# work in progress
 
 from math import sqrt
 import json
@@ -31,10 +30,10 @@ class testing(unittest.TestCase):
     def testBuildTrainer(self):
         self.assertEqual(buildTrainingVectors(combineMany([numScreens]), testDir, 5)[0]\
                              , ('texttospeech', [('numScreens', 1)]))
-        
-        
+
     def testCombine(self):
         lengthFirst = combineMany([numMediaAssets, numScreens])
+
 
 # featureFuncs helpers
 # enabling iteration over screens for information located in either 2nd or 
@@ -113,7 +112,7 @@ def componentTypes(JSON):
                     'NxtTouchSensor', 'NxtUltrasonicSensor', 'NxtDirectCommands']
     result = []
     for comp in compList:
-        result += [(str('has'+comp), hasComponent(JSON, comp)*3)] # WEIGHED
+        result += [(str('has'+comp), hasComponent(JSON, comp))] # WEIGH??
     return result
 
 def blockTypes(JSON):
@@ -148,7 +147,7 @@ def blockTypes(JSON):
                         blocks[activity] += JSON[x]['Blocks']['*Top Level Blocks'][key]
     for block in blockList:
          if block in blocks.keys():
-             result += [(str('has' + block), blocks[block])] #WEIGHED
+             result += [(str('has' + block), blocks[block])] # WEIGH??
          else:
              result += [(str('has' + block), 0)]
     return result
@@ -198,11 +197,11 @@ def labelsSortedByDistance(testvector, trainingVectors):
     euclideanDistance = euclideanDistanceFrom(testvector)
     return sorted(map(lambda x: (x[0], euclideanDistance(x[1])), trainingVectors), key=lambda name:name[1])
 
-def closestTutorial(projectPath, tutorials, featurefunc, numtut):
+def closestTutorials(projectPath, tutorials, featurefunc, numtut, numClosest):
     '''returns a tuple of (projectpath, (name of closest tutorial, distance))'''
     test = summarytofeature(projectPath, featurefunc)
     training = buildTrainingVectors(featurefunc, tutorials, numtut)
-    return (projectPath, labelsSortedByDistance(test, training)[:50])
+    return (projectPath, labelsSortedByDistance(test, training)[:numClosest])
 
 def findsummaries(dirName, numUsers):
     '''returns a list of JSON summaries from a directory'''
@@ -215,51 +214,77 @@ def findsummaries(dirName, numUsers):
                     summaries.append(os.path.join(source, project))
     return summaries
 
-def bestMatches(tutorialDir, numtut, projectDir, numPro, featurefunc):
+def allClosestTutorials(tutorialDir, numtut, projectDir, numPro, featurefunc, numClosest):
     results = []
     projects = findsummaries(projectDir, numPro)
     for project in projects:
-        results.append(closestTutorial(project, tutorialDir, featurefunc, numtut))
+        results.append(closestTutorials(project, tutorialDir, featurefunc, numtut, numClosest))
     return results
 
 def filterMatches(bestMatches, bar):
     results = []
     for project in bestMatches:
-        if project[1][1] <= bar:
-            results.append(project)
+        goodMatches = []
+        for match in project[1]:
+            if match[1] <= bar:
+                goodMatches.append(match)
+        results.append((project[0], goodMatches))
     return results
 
-def createPlot(closeTuts, numTuts):
+#print filterMatches([('/Users/Maja/Documents/AI/ai2_users_random/000098/6730814433787904_summary.json', [('HelloPurr', 4.242640687119285), ('geolocation', 6.244997998398398), ('PicCall', 7.0710678118654755), ('TalkToMe', 7.681145747868608), ('PaintPot', 8.0), ('BallBounce', 8.774964387392123), ('Magic8Ball', 14.0)])], 10)
+
+def createPlot(closeTuts):
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    X = range(numTuts)
-    Y = [x[1] for x in closeTuts[1][:numTuts]]
+    X = range(len(closeTuts[1]))
+    Y = [x[1] for x in closeTuts[1]]
+    print len(X)
+    print len(Y)
     plt.plot(X, Y, 'ro')
-    plt.axis([-1, numTuts, 0, closeTuts[1][numTuts][1]])
+    plt.axis([-1, len(X), 0, closeTuts[1][-1][1]+1])
     plt.ylabel('Distance to Tutorials')
     plt.title(closeTuts[0])
-    for i in range(numTuts):
-        xy = zip(X,[x[1] for x in closeTuts[1][:numTuts]])
+    for i in X:
+        xy = zip(X,[x[1] for x in closeTuts[1]])
         ax.annotate(closeTuts[1][i][0], xy=xy[i])
     plt.show()
 
+def createTrainingFile(dirName, outputName):
+    txtf = open(outputName, 'w')
+    for source in os.listdir(dirName):
+        source = os.path.join(dirName, source)
+        if os.path.isdir(source):
+            for project in os.listdir(source):
+                if project.endswith('summary.json'):
+                    txtf.write(source.split('/')[-1] + '/' +  project + '\n')
+    txtf.close()    
+
 def main():
     """Runs the classification pipeline with command line arguments"""
-#    combi = combineMany([blockTypes, componentTypes, numMediaAssets, numScreens, numCompAndBlocks])
+    combi = combineMany([blockTypes, componentTypes, numMediaAssets, numScreens, numCompAndBlocks])
    # randomProject = summarytofeature('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', combi)
   #  training =  buildTrainingVectors(combi, '/Users/Maja/Documents/AI/ai2_users_random', 10)
  #   combiDistance = labelsSortedByDistance(randomProject, training)
 #    print combiDistance
-#    print closestTutorial('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 100000)
+#    print closestTutorials('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 100000)
     #findsummaries('/Users/Maja/Documents/AI/Tutorials', 100)
-#    bm = bestMatches('/Users/Maja/Documents/AI/Tutorials', 100, '/Users/Maja/Documents/AI/ai2_users_random', 5, combi)
-    #print filterMatches(bm, 8.0)
-#    createPlot(bm[-1], 25)
-    
+    bm = allClosestTutorials('/Users/Maja/Documents/AI/Tutorials', 100, '/Users/Maja/Documents/AI/ai2_users_random', 104, combi, 10)
+    for project in bm:
+        for i in range(len(project[1])):
+            if project[1][i][1] == 0.0:
+                print project[0] + ' is ' + project[1][0][0]
+            elif project[1][i][1] <= 2:
+                print project[0] + ' might be ' + project[1][i][0]
+
+#    print bm
+    #print filterMatches(bm, 10.0)
+    createPlot(bm[-1])
+#    createTrainingFile('/Users/Maja/Documents/AI/ai2_users_random', 'maja_classification/training.txt')
+
+
 
 if __name__=='__main__':  # invoke main() when program is run
     
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(testing)
     unittest.TextTestRunner().run(suite)
     main()
-    
