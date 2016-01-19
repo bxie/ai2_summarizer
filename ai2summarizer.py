@@ -309,13 +309,14 @@ def findComponentType(compName, zippedFile, scmfile):
         and scmLines[1].strip() == '$JSON'
         and scmLines[3].strip() == '|#'):
         data = json.loads(scmLines[2])
-    for comp in data[u'Properties'][u'$Components']:
-        if comp[u'$Type'][-11:] == 'Arrangement':
-            for elt in comp[u'$Components']:
-                if str(elt[u'$Name']) == compName[0]:
-                    return elt[u'$Type']
-        elif str(comp[u'$Name']) == compName[0]:
-            return comp[u'$Type']
+    if u'$Components' in data[u'Properties'].keys():
+        for comp in data[u'Properties'][u'$Components']:
+            if u'$Components' in comp.keys():
+                for elt in comp[u'$Components']:
+                    if elt[u'$Name'].encode('utf-8') == compName[0]:
+                        return elt[u'$Type']
+                    elif comp[u'$Name'].encode('utf-8') == compName[0]:
+                        return comp[u'$Type']
 
 """
 Given the path to a directory that contains users (dirName) and a file extension (fileType),
@@ -485,7 +486,7 @@ blockTypeDict = {
 # Maja's tests
 # cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
-# allProjectsToJSONFiles('/Users/Maja/Documents/AI/Tutorials', 1000)
+allProjectsToJSONFiles('/Users/Maja/Documents/AI/ai2_users_random', 100000)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 #print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 
