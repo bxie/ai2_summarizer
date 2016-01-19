@@ -7,7 +7,7 @@ import json
 import unittest
 import os
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 __author__='Maja'
 
@@ -25,10 +25,10 @@ class testing(unittest.TestCase):
         self.assertEqual(numScreens(self.data), [('numScreens', 1)])
         self.assertEqual(componentTypes(self.data)[0], ('hasCamera', 0))
         self.assertEqual(numCompAndBlocks(self.data)[0], ('numStrings', 0))
-        self.assertEqual(blockTypes(self.data)[0], ('hasAboveRange', 0))
+        self.assertEqual(blockTypes(self.data)[1], ('hasAboveRange', 0))
 
     def testBuildTrainer(self):
-        self.assertEqual(buildTrainingVectors(combineMany([numScreens]), testDir, 5)[0]\
+        self.assertEqual(buildTrainingVectors(combineMany([numScreens]), testDir)[0]\
                              , ('texttospeech', [('numScreens', 1)]))
 
     def testCombine(self):
@@ -73,12 +73,12 @@ def hasComponent(JSON, component):
 # feature functions 
 
 def numMediaAssets(JSON):
-    return [('numMediaAssets', len(JSON['*Media Assets']))]
+    return [('numMediaAssets', sqrt(float(len(JSON['*Media Assets']))))] # weighed, square root, or log? one media assett instead of 0 means more than 10 instead of 9
 
 def numScreens(JSON):
     return [('numScreens', JSON['*Number of Screens'])]
 
-def numCompAndBlocks(JSON):
+def numCompAndBlocks(JSON): # weighed, sqrt. 
     result = []
     # featList = [(Feature, (path to feature beyond screen name))]
     featList = [('Strings', ('Blocks', 'Active Blocks', 'Strings')), \
@@ -93,61 +93,60 @@ def numCompAndBlocks(JSON):
                     ('TopLevelBlocks', ('Blocks', '*Top Level Blocks'))]
     for feature in featList:
         if len(feature[1]) == 3:
-            result += [('num'+str(feature[0]), findNum3(JSON, feature[1][0], feature[1][1], feature[1][2]))]
+            result += [('num'+str(feature[0]), sqrt(float(findNum3(JSON, feature[1][0], feature[1][1], feature[1][2]))))]
         elif len(feature[1]) == 2:
-            result += [('num'+str(feature[0]), findNum2(JSON, feature[1][0], feature[1][1]))]
+            result += [('num'+str(feature[0]), sqrt(float(findNum2(JSON, feature[1][0], feature[1][1]))))] 
     return result
 
-def componentTypes(JSON):
-    compList = ['Camera', 'Canvas', 'Button', 'HorizontalArrangement', 'VerticalArrangement', \
+def componentTypes(JSON): # weighed, *2
+    '''takes a json dictionary as an input, and returns a list of featurevectors 
+    related to the frequency of each component type'''
+    compList = ['Camera', 'Canvas', 'Button', \
                     'Sound', 'TinyDB', 'LocationSensor', 'Clock', 'PhoneCall', 'Notifier', \
                     'ActivityStarter', 'Label', 'ListPicker', 'PhoneNumberPicker', \
                     'WebViewer', 'Image', 'TextBox', 'TextToSpeech', 'AccelerometerSensor', 'NearField', \
                     'Web', 'Player', 'BluetoothClient', 'BluetoothServer', 'VideoPlayer', 'ImagePicker', \
                     'File', 'ListView', 'DatePicker', 'TimePicker', 'CheckBox', 'Slider', 'PasswordTextBox', \
-                    'Spinner', 'TableArrangement', 'YandexTranslate', 'Camcorder', 'SpeechRecognizer', 'SoundRecorder' \
+                    'Spinner', 'YandexTranslate', 'Camcorder', 'SpeechRecognizer', 'SoundRecorder' \
                     'ImageSprite', 'Ball', 'OrientationSensor', 'ProximitySensor', 'EmailPicker', 'Texting', \
                     'Sharing', 'Twitter', 'ContactPicker', 'FusiontablesControl', 'TinyWebDB', \
                     'NxtDrive', 'NxtColorSensor', 'NxtLightSensor', 'NxtSoundSensor', \
                     'NxtTouchSensor', 'NxtUltrasonicSensor', 'NxtDirectCommands']
-    result = []
-    for comp in compList:
-        result += [(str('has'+comp), hasComponent(JSON, comp))] # WEIGH??
-    return result
+    #'HorizontalArrangement', 'VerticalArrangement', 'TableArrangement' don't affect functionality and can be excluded
+    return map(lambda comp: (str('has'+comp), hasComponent(JSON, comp)*2), compList) # weighed
 
-def blockTypes(JSON):
+def blockTypes(JSON): # weighed, *2 for top *2 for all. determines functionality.
+    '''takes a json dictionary as an input, and returns featvectors related to 
+    the frequency of each blocktype in the top level'''
     result = []
-    blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActivity', \
-                     'AfterChoosing', 'AfterFileSaved', 'AfterGettingText', 'AfterPicking', \
-                     'AfterPicture', 'AfterRecording', 'AfterSelecting', 'AfterSoundRecorded', \
-                     'AfterScan', 'AfterSpeaking', 'AfterTextInput', 'AfterTimeSet', \
-                     'BeforeGettingText', 'BeforeSpeaking', 'BelowRange', 'Changed', 'Click',\
-                     'CollidedWith', 'ColorChanged', 'Completed', 'ConnectionAccepted', \
-                     'DirectMessagesReceived', 'Dragged', 'FollowersReceived', 'FriendTimelineReceived', \
-                     'GotFile', 'GotFocus', 'GotResult', 'GotText', 'GotTranslation', 'GotValue', \
-                     'IsAuthorized', 'LocationChanged', 'IncomingCallAnswered', 'LongClick', \
-                     'LostFocus', 'AccelerationChanged', 'Shaking', 'MentionsReceived', \
-                     'MessageReceived', 'Timer', 'Initialize', 'OrientationChanged', 'OtherPlayerStarted',\
-                     'PhoneCallEnded', 'PhoneCallStarted',  'NoLongerCollidingWith', 'PositionChanged', \
-                     'ProximityChanged', 'SearchSuccessful', 'StartedRecording', 'StatusChanged', \
-                     'StoppedRecording','TagRead', 'TagWritten',  'Touched', 'TouchDown', 'TouchUp', \
-                     'ValueStored', 'WebServiceError', 'WithinRange', 'EdgeReached', 'Flung',\
-                     'Pressed', 'Released']
-    blocks = {}
+    topblocks = {}
+    allblocks = {}
     for x in [key for key in JSON.keys() if key[0] != '*']:
-        if JSON[x]['Blocks']['*Top Level Blocks'] == 'NO ACTIVE BLOCKS':
+        if len(JSON[x]['Blocks']['*Top Level Blocks']) == 0  or \
+                JSON[x]['Blocks']['Active Blocks'] == 'NO ACTIVE BLOCKS':
             pass
-        else:
+        else: # can be written more elegantly
             for key in JSON[x]['Blocks']['*Top Level Blocks']:
                 if '.' in key:
                     activity = key.split('.')[1]
-                    if activity not in blocks.keys():
-                        blocks[activity] = JSON[x]['Blocks']['*Top Level Blocks'][key]
+                    if activity not in topblocks.keys():
+                        topblocks[activity] = JSON[x]['Blocks']['*Top Level Blocks'][key]
                     else:
-                        blocks[activity] += JSON[x]['Blocks']['*Top Level Blocks'][key]
+                        topblocks[activity] += JSON[x]['Blocks']['*Top Level Blocks'][key]
+            for key in JSON[x]['Blocks']['Active Blocks']['Types']:
+                if '.' in key:
+                    activity = key.split('.')[1]
+                    if activity not in allblocks.keys():
+                        allblocks[activity] = JSON[x]['Blocks']['Active Blocks']['Types'][key]
+                    else:
+                        allblocks[activity] += JSON[x]['Blocks']['Active Blocks']['Types'][key]
     for block in blockList:
-         if block in blocks.keys():
-             result += [(str('has' + block), blocks[block])] # WEIGH??
+         if block in topblocks.keys():
+             result += [(str('hasTop' + block), topblocks[block]*4)] # WEIGHED
+         else:
+             result += [(str('hasTop' + block), 0)]
+         if block in allblocks.keys():
+             result += [(str('has' + block), allblocks[block]*2)] # WEIGHED
          else:
              result += [(str('has' + block), 0)]
     return result
@@ -171,18 +170,19 @@ def euclideanDistanceFrom(v):
         return sqrt(sum(map(squareDiff, range(len(v[1])))))
     return euclideanDistanceHelper
 
-def buildTrainingVectors(featurefunc, dirName, numUsers):
-
+def buildTrainingVectors(featurefunc, dirName):
     """read summaries from repository, return a list of tuples,
     where each tuple in the list corresponds to a tutorial.
     Each tuple is of the form (status, featurevector),
     where status is if project is a tutorial (here it's always yes),
     and featurevector is the feature vector of the name under featurefunc.
     """
-    summaries = findsummaries(dirName, numUsers)
+    summaries = findsummaries(dirName, 100)
     return map(lambda x: summarytofeature(x, featurefunc), summaries)
 
 def summarytofeature(s, featurefunc):
+    '''takes a JSON summary and translates it into a dict, 
+    and returns a tuple (path, features) for the summary'''
     with open(s, 'r') as data_file:
             JSON = json.load(data_file)
             data_file.close()
@@ -197,10 +197,10 @@ def labelsSortedByDistance(testvector, trainingVectors):
     euclideanDistance = euclideanDistanceFrom(testvector)
     return sorted(map(lambda x: (x[0], euclideanDistance(x[1])), trainingVectors), key=lambda name:name[1])
 
-def closestTutorials(projectPath, tutorials, featurefunc, numtut, numClosest):
+def closestTutorials(projectPath, tutorials, featurefunc, numClosest):
     '''returns a tuple of (projectpath, (name of closest tutorial, distance))'''
     test = summarytofeature(projectPath, featurefunc)
-    training = buildTrainingVectors(featurefunc, tutorials, numtut)
+    training = buildTrainingVectors(featurefunc, tutorials)
     return (projectPath, labelsSortedByDistance(test, training)[:numClosest])
 
 def findsummaries(dirName, numUsers):
@@ -214,73 +214,68 @@ def findsummaries(dirName, numUsers):
                     summaries.append(os.path.join(source, project))
     return summaries
 
-def allClosestTutorials(tutorialDir, numtut, projectDir, numPro, featurefunc, numClosest):
-    results = []
-    projects = findsummaries(projectDir, numPro)
+
+def allClosestTutorials(tutorialDir, projectDir, numPro, featurefunc, numClosest):
+    '''returns the numClosest closest tutorials from numPro projects in projectDir'''
+    return map(lambda x: closestTutorials(x, tutorialDir, featurefunc, numClosest), \
+                   findsummaries(projectDir, numPro))
+
+
+def instanceClosestTutorials(trainFile, proDir, tutorialDir, featurefunc, numClosest):
+    '''returns the closest tutorials for each identified project from TrainFile'''
+    tutorials = listsOfInstances(trainFile)[0]
+    nottutorials = listsOfInstances(trainFile)[1]
+    return map(lambda x: closestTutorials(x, tutorialDir, featurefunc, numClosest), \
+                   map(lambda x: proDir + '/' + x, tutorials)), \
+                   map(lambda x: closestTutorials(x, tutorialDir, featurefunc, numClosest), \
+                           map(lambda x: proDir + '/' + x, nottutorials))
+
+# helpfunction for instanceClosestTutorials
+def listsOfInstances(trainFile):
+    projects = open(trainFile, 'r').readlines()
+    tutorials = []
+    notTutorials = []
     for project in projects:
-        results.append(closestTutorials(project, tutorialDir, featurefunc, numtut, numClosest))
-    return results
+        project = project.split()
+        if project[1] == str(True):
+            tutorials.append(project[0])
+        else:
+            notTutorials.append(project[0])
+    return tutorials, notTutorials
 
-def filterMatches(bestMatches, bar):
-    results = []
-    for project in bestMatches:
-        goodMatches = []
-        for match in project[1]:
-            if match[1] <= bar:
-                goodMatches.append(match)
-        results.append((project[0], goodMatches))
-    return results
 
-#print filterMatches([('/Users/Maja/Documents/AI/ai2_users_random/000098/6730814433787904_summary.json', [('HelloPurr', 4.242640687119285), ('geolocation', 6.244997998398398), ('PicCall', 7.0710678118654755), ('TalkToMe', 7.681145747868608), ('PaintPot', 8.0), ('BallBounce', 8.774964387392123), ('Magic8Ball', 14.0)])], 10)
+def dumpToJSON(projects, outputfile):
+    with open (outputfile, 'w')as outFile:
+        outFile.write(json.dumps(projects,
+                             sort_keys=True,
+                             indent=2, separators=(',', ':')))
 
-def createPlot(closeTuts):
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    X = range(len(closeTuts[1]))
-    Y = [x[1] for x in closeTuts[1]]
-    print len(X)
-    print len(Y)
-    plt.plot(X, Y, 'ro')
-    plt.axis([-1, len(X), 0, closeTuts[1][-1][1]+1])
-    plt.ylabel('Distance to Tutorials')
-    plt.title(closeTuts[0])
-    for i in X:
-        xy = zip(X,[x[1] for x in closeTuts[1]])
-        ax.annotate(closeTuts[1][i][0], xy=xy[i])
-    plt.show()
-
-def createTrainingFile(dirName, outputName):
-    txtf = open(outputName, 'w')
-    for source in os.listdir(dirName):
-        source = os.path.join(dirName, source)
-        if os.path.isdir(source):
-            for project in os.listdir(source):
-                if project.endswith('summary.json'):
-                    txtf.write(source.split('/')[-1] + '/' +  project + '\n')
-    txtf.close()    
 
 def main():
     """Runs the classification pipeline with command line arguments"""
-    combi = combineMany([blockTypes, componentTypes, numMediaAssets, numScreens, numCompAndBlocks])
-   # randomProject = summarytofeature('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', combi)
-  #  training =  buildTrainingVectors(combi, '/Users/Maja/Documents/AI/ai2_users_random', 10)
- #   combiDistance = labelsSortedByDistance(randomProject, training)
-#    print combiDistance
-#    print closestTutorials('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 100000)
-    #findsummaries('/Users/Maja/Documents/AI/Tutorials', 100)
-    bm = allClosestTutorials('/Users/Maja/Documents/AI/Tutorials', 100, '/Users/Maja/Documents/AI/ai2_users_random', 104, combi, 10)
-    for project in bm:
-        for i in range(len(project[1])):
-            if project[1][i][1] == 0.0:
-                print project[0] + ' is ' + project[1][0][0]
-            elif project[1][i][1] <= 2:
-                print project[0] + ' might be ' + project[1][i][0]
+#    combi = combineMany([blockTypes, numMediaAssets, numScreens, componentTypes, numCompAndBlocks])#, componentTypes])
+#    print closestTutorials('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 10, 10)
+    #bm = allClosestTutorials('/Users/Maja/Documents/AI/Tutorials', '/Users/Maja/Documents/AI/ai2_users_random', 104, combi, 1)
+    #bm = instanceClosestTutorials('maja_classification/training.txt', '/Users/Maja/Documents/AI/ai2_users_random', '/Users/Maja/Documents/AI/Tutorials', combi, 10)
+    #dumpToJSON(bm, 'instanceClosestTutorials.json')
 
-#    print bm
-    #print filterMatches(bm, 10.0)
-    createPlot(bm[-1])
-#    createTrainingFile('/Users/Maja/Documents/AI/ai2_users_random', 'maja_classification/training.txt')
 
+blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActivity', \
+                     'AfterChoosing', 'AfterFileSaved', 'AfterGettingText', 'AfterPicking', \
+                     'AfterPicture', 'AfterRecording', 'AfterSelecting', 'AfterSoundRecorded', \
+                     'AfterScan', 'AfterSpeaking', 'AfterTextInput', 'AfterTimeSet', \
+                     'BeforeGettingText', 'BeforeSpeaking', 'BelowRange', 'Changed', 'Click',\
+                     'CollidedWith', 'ColorChanged', 'Completed', 'ConnectionAccepted', \
+                     'DirectMessagesReceived', 'Dragged', 'FollowersReceived', 'FriendTimelineReceived', \
+                     'GotFile', 'GotFocus', 'GotResult', 'GotText', 'GotTranslation', 'GotValue', \
+                     'IsAuthorized', 'LocationChanged', 'IncomingCallAnswered', 'LongClick', \
+                     'LostFocus', 'AccelerationChanged', 'Shaking', 'MentionsReceived', \
+                     'MessageReceived', 'Timer', 'Initialize', 'OrientationChanged', 'OtherPlayerStarted',\
+                     'PhoneCallEnded', 'PhoneCallStarted',  'NoLongerCollidingWith', 'PositionChanged', \
+                     'ProximityChanged', 'SearchSuccessful', 'StartedRecording', 'StatusChanged', \
+                     'StoppedRecording','TagRead', 'TagWritten',  'Touched', 'TouchDown', 'TouchUp', \
+                     'ValueStored', 'WebServiceError', 'WithinRange', 'EdgeReached', 'Flung',\
+                     'Pressed', 'Released']
 
 
 if __name__=='__main__':  # invoke main() when program is run
