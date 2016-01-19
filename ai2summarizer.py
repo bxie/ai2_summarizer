@@ -21,9 +21,10 @@ def allProjectsToJSONFiles(userDir, numUsers):
     '''assumes cwd contains dir, that contains projects (in .aia, .zip, or as dir)'''
     listOfAllProjects = findProjectDirs(userDir, numUsers)
     for project in listOfAllProjects:
-        projectToJSONFile(project)
-        if os.path.exists(project.split('.')[0]) and project.split('.')[1] == 'zip':
-            os.remove(project)
+        if os.path.exists(project):
+            projectToJSONFile(project)
+            if os.path.exists(project.split('.')[0]) and project.split('.')[1] == 'zip':
+                os.remove(project)
 
 
 def findProjectDirs(dirName, numUsers):
@@ -316,7 +317,10 @@ def findComponentType(compName, zippedFile, scmfile):
         elif str(comp[u'$Name']) == compName[0]:
             return comp[u'$Type']
 
-
+"""
+Given the path to a directory that contains users (dirName) and a file extension (fileType),
+remove all files in the project directory that end with that file extension
+"""
 def cleanup(dirName, fileType):
     for user in os.listdir(dirName):
         user = os.path.join(dirName, user)
