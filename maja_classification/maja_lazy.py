@@ -26,6 +26,7 @@ class testing(unittest.TestCase):
         self.assertEqual(componentTypes(self.data)[0], ('hasCamera', 0))
         self.assertEqual(numCompAndBlocks(self.data)[0], ('numStrings', 0))
         self.assertEqual(blockTypes(self.data)[1], ('hasAboveRange', 0))
+        self.assertEqual(size(self.data), [('size', 7)])
 
     def testBuildTrainer(self):
         self.assertEqual(buildTrainingVectors(combineMany([numScreens]), testDir)[0]\
@@ -43,7 +44,7 @@ def findNum2(JSON, a, b):
     result = 0
     for x in [key for key in JSON.keys() if key[0] != '*']:
         if JSON[x][a] == 'N' or JSON[x][a] == 'NO ACTIVE COMPONENTS':
-            pass
+            return 0
         elif isinstance(JSON[x][a][b], int):
             result += JSON[x][a][b]
         else:
@@ -54,7 +55,7 @@ def findNum3(JSON, a, b, c):
     result = 0
     for x in [key for key in JSON.keys() if key[0] != '*']:
         if JSON[x][a][b] == 'NO ACTIVE BLOCKS':
-            pass
+            return 0
         elif isinstance(JSON[x][a][b][c], int):
             result += JSON[x][a][b][c]
         else:
@@ -97,6 +98,10 @@ def numCompAndBlocks(JSON): # weighed, sqrt.
         elif len(feature[1]) == 2:
             result += [('num'+str(feature[0]), sqrt(float(findNum2(JSON, feature[1][0], feature[1][1]))))] 
     return result
+
+def size(JSON):
+    return [('size', #findNum2(JSON, 'Components', 'Number of Components'))] + \
+                 findNum3(JSON, 'Blocks', 'Active Blocks', '*Number of Blocks'))]
 
 def componentTypes(JSON): # weighed, *2
     '''takes a json dictionary as an input, and returns a list of featurevectors 
@@ -230,6 +235,14 @@ def instanceClosestTutorials(trainFile, proDir, tutorialDir, featurefunc, numClo
                    map(lambda x: closestTutorials(x, tutorialDir, featurefunc, numClosest), \
                            map(lambda x: proDir + '/' + x, nottutorials))
 
+def sizeOfInstances(trainFile, proDir):
+    tutorials = listsOfInstances(trainFile)[0]
+    nottutorials = listsOfInstances(trainFile)[1]
+    return map(lambda x: summarytofeature(x, size), \
+                   map(lambda x:proDir + '/' + x, tutorials)), \
+                   map(lambda x: summarytofeature(x, size), \
+                           map(lambda x: proDir + '/' + x, nottutorials))
+
 # helpfunction for instanceClosestTutorials
 def listsOfInstances(trainFile):
     projects = open(trainFile, 'r').readlines()
@@ -252,13 +265,10 @@ def dumpToJSON(projects, outputfile):
 
 
 def main():
-    """Runs the classification pipeline with command line arguments"""
-#    combi = combineMany([blockTypes, numMediaAssets, numScreens, componentTypes, numCompAndBlocks])#, componentTypes])
-#    print closestTutorials('/Users/Maja/Documents/AI/Tutorials/Wolber/HelloPurr_summary.json', '/Users/Maja/Documents/AI/ai2_users_random', combi, 10, 10)
-    #bm = allClosestTutorials('/Users/Maja/Documents/AI/Tutorials', '/Users/Maja/Documents/AI/ai2_users_random', 104, combi, 1)
-    #bm = instanceClosestTutorials('maja_classification/training.txt', '/Users/Maja/Documents/AI/ai2_users_random', '/Users/Maja/Documents/AI/Tutorials', combi, 10)
+    #Maja's tests
+    #combi = combineMany([blockTypes, numMediaAssets, numScreens, componentTypes, numCompAndBlocks])
+    #bm = instanceClosestTutorials('maja_classification/training.txt', '/Users/Maja/Documents/AI/ai2_users_random', '/Users/Maja/Documents/AI/Tutorials', combi, 1)
     #dumpToJSON(bm, 'instanceClosestTutorials.json')
-
 
 blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActivity', \
                      'AfterChoosing', 'AfterFileSaved', 'AfterGettingText', 'AfterPicking', \
@@ -278,7 +288,7 @@ blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActi
                      'Pressed', 'Released']
 
 
-if __name__=='__main__':  # invoke main() when program is run
+if __name__=='__main__':  
     
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(testing)
     unittest.TextTestRunner().run(suite)
