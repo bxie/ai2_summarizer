@@ -269,6 +269,7 @@ def main():
     #combi = combineMany([blockTypes, numMediaAssets, numScreens, componentTypes, numCompAndBlocks])
     #bm = instanceClosestTutorials('maja_classification/training.txt', '/Users/Maja/Documents/AI/ai2_users_random', '/Users/Maja/Documents/AI/Tutorials', combi, 1)
     #dumpToJSON(bm, 'instanceClosestTutorials.json')
+    pass
 
 blockList = ['AboveRange', 'ActivityCanceled', 'AccelerationChanged', 'AfterActivity', \
                      'AfterChoosing', 'AfterFileSaved', 'AfterGettingText', 'AfterPicking', \
