@@ -26,8 +26,11 @@ def allProjectsToJSONFiles(userDir, numUsers):
             if os.path.exists(project.split('.')[0]) and project.split('.')[1] == 'zip':
                 os.remove(project)
 
-
 def findProjectDirs(dirName, numUsers):
+    """
+    given path to directory containing users (dirName) and number of users(numUsers),
+    zip user directories and return list of paths to zipped project directories
+    """
     projects = []
     for user in os.listdir(dirName)[:numUsers]:
         user = os.path.join(dirName, user)
@@ -41,6 +44,10 @@ def findProjectDirs(dirName, numUsers):
     return projects
 
 def zipdir(path, ziph):
+    """
+    Given directory to path (path) and path to outputted zipped file (ziph),
+    zip directory and return ziph
+    """
     zf = zipfile.ZipFile(ziph, "w")
     for root, dirs, files in os.walk(path):
         for file in files:
@@ -49,6 +56,9 @@ def zipdir(path, ziph):
     return ziph
 
 def projectToJSONFile(projectPath):
+    """
+    Given path to zipped project (projectPath), create summary file and write to disk
+    """
     jsonProjectFileName = projectPath.split('.')[0] + '_summary.json'
     jsonProject = projectToJSON(projectPath)
     with open (jsonProjectFileName, 'w') as outFile:
@@ -57,6 +67,9 @@ def projectToJSONFile(projectPath):
                              indent=2, separators=(',', ':')))
 
 def projectToJSON(projectPath):
+    """
+    Given path to zipped project (projectPath), return JSON summary of project
+    """
     summary = {}
     if not projectPath.endswith('zip') and not projectPath.endswith('.aia'):
         raise Exception("project is not .aia or  .zip")
@@ -87,16 +100,28 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
         if len(matches) == 1:
             fullFilename = matches[0]
         elif len(matches) == 0:
-            raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
+            if pathlessFilename == 'project.properties': # use dummy properties file if missing
+                return dummy_properties()
+            
+            matches_alt = filter(lambda name: str.lower(name.split('/')[-1]) == str.lower(pathlessFilename), names) #considering case issues
+            if len(matches_alt) == 1:
+                fullFilename = matches_alt[0]
+            else:
+                raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
         else:
             raise RuntimeError("linesFromZippedFile -- multiple matches for file named: "
                          + pathlessFilename
                          + "[" + ",".join(matches) + "]")
     return zippedFile.open(fullFilename).readlines()
 
-def findName(zippedFile): 
-    pp = linesFromZippedFile(zippedFile, 'project.properties') 
-    return  pp[1][:-1].split('=')[1]
+def findName(zippedFile):
+    """
+    given zipfile of a project (zippedFile), return name of project 
+    """
+    pp = linesFromZippedFile(zippedFile, 'project.properties')
+    if pp:
+        return  pp[1][:-1].split('=')[1]
+    return ""
 
 def findScreenNames(zippedFile): 
     names = zippedFile.namelist()
@@ -319,6 +344,22 @@ def findComponentType(compName, zippedFile, scmfile):
                         return comp[u'$Type']
 
 """
+Return a list representing a dummy project properties file
+equivalent to output of linesFromZippedFile(myZip, 'project.properties')
+"""
+def dummy_properties():
+    return ['main=appinventor.dummy_username.dummy_app_name.Screen1\n',
+     'name=dummy_app_name\n',
+     'assets=../assets\n',
+     'source=../src\n',
+     'build=../build\n',
+     'versioncode=1\n',
+     'versionname=1.0\n',
+     'useslocation=False\n',
+     'aname=dummy_app_name\n']
+
+    
+"""
 Given the path to a directory that contains users (dirName) and a file extension (fileType),
 remove all files in the project directory that end with that file extension
 """
@@ -486,7 +527,7 @@ blockTypeDict = {
 # Maja's tests
 # cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
 # projectToJSONFile('/Users/Maja/Documents/AI/PaintPot2Old.zip')
-allProjectsToJSONFiles('/Users/Maja/Documents/AI/ai2_users_random', 100000)
+# allProjectsToJSONFiles('/Users/Maja/Documents/AI/ai2_users_random', 100000)
 # findComponentType('hey', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 #print upgradeFormat('Canvas_Clicked', '/Users/Maja/Documents/AI/PaintPot2Old.zip', 'Screen1.scm')
 
@@ -496,3 +537,11 @@ allProjectsToJSONFiles('/Users/Maja/Documents/AI/ai2_users_random', 100000)
 # allProjectsToJSONFiles('/Users/fturbak/Projects/AppInventor2Stats/data/benji_ai2_users_random', 10)
 # allProjectsToJSONFiles('/Users/fturbak/Projects/AppInventor2Stats/data/benji_ai2_users_random', 10003
 # projectToJSONFile('/Users/fturbak/Projects/AppInventor2Stats/data/MIT-tutorials/HelloPurr.aia')
+
+# Benji's Tests
+# print 'running...'
+# dir_small = "/Users/bxie/Documents/ai2_users_long_term_100" #100 users 
+# cleanup(dir_small, 'summary.json')
+# allProjectsToJSONFiles(dir_small, 100)
+# print 'done!'
+
