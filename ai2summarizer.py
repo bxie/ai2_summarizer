@@ -17,6 +17,16 @@ import zipfile
 import xml.etree.ElementTree as ET
 import re
 
+# for dummy project.properties and meta files 
+DUMMY_PROJECT_NAME = '<<dummy_project_name>>'
+DUMMY_USER_NAME = '<<dummy_user_name>>'
+DUMMY_CREATED_TIME = -2
+DUMMY_MODIFIED_TIME = -1
+
+num_missing_properties = 0
+num_missing_meta = 0
+num_case_mismatches = 0
+
 def allProjectsToJSONFiles(userDir, numUsers):
     '''assumes cwd contains dir, that contains projects (in .aia, .zip, or as dir)'''
     listOfAllProjects = findProjectDirs(userDir, numUsers)
@@ -75,6 +85,7 @@ def projectToJSON(projectPath):
         raise Exception("project is not .aia or  .zip")
     with zipfile.ZipFile(projectPath, 'r') as myZip:
         summary['**Project Name'] = findName(myZip)
+        summary['**created'], summary['**modified'] = findCreatedModifiedTimes(myZip)
         listOfScreens = findScreenNames(myZip)
         summary['*Number of Screens'] = len(listOfScreens)
         media = []
@@ -100,11 +111,15 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
         if len(matches) == 1:
             fullFilename = matches[0]
         elif len(matches) == 0:
+            # print names
             if pathlessFilename == 'project.properties': # use dummy properties file if missing
-                return dummy_properties()
-            
+                return dummyProperties()
+            elif pathlessFilename == 'META': #use dummy META file if missing
+                return dummyMeta() 
             matches_alt = filter(lambda name: str.lower(name.split('/')[-1]) == str.lower(pathlessFilename), names) #considering case issues
             if len(matches_alt) == 1:
+                global num_case_mismatches
+                num_case_mismatches += 1
                 fullFilename = matches_alt[0]
             else:
                 raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
@@ -122,6 +137,14 @@ def findName(zippedFile):
     if pp:
         return  pp[1][:-1].split('=')[1]
     return ""
+
+def findCreatedModifiedTimes(zippedFile):
+    """
+    given a zipfile of a project (zippedFile), return tuple of created and modified times
+    """
+    lines = linesFromZippedFile(zippedFile, 'META')
+    meta = json.loads(lines[0])
+    return meta['created'], meta['modified']
 
 def findScreenNames(zippedFile): 
     names = zippedFile.namelist()
@@ -343,21 +366,30 @@ def findComponentType(compName, zippedFile, scmfile):
                     elif comp[u'$Name'].encode('utf-8') == compName[0]:
                         return comp[u'$Type']
 
-"""
-Return a list representing a dummy project properties file
-equivalent to output of linesFromZippedFile(myZip, 'project.properties')
-"""
-def dummy_properties():
-    return ['main=appinventor.dummy_username.dummy_app_name.Screen1\n',
-     'name=dummy_app_name\n',
+def dummyProperties():
+    """
+    Return a list representing a dummy project properties file
+    equivalent to output of linesFromZippedFile(myZip, 'project.properties')
+    """
+    global num_missing_properties
+    num_missing_properties += 1   
+    return ['main=appinventor.' + DUMMY_USER_NAME + '.' + DUMMY_PROJECT_NAME + '.Screen1\n',
+     'name=' + DUMMY_PROJECT_NAME + '\n',
      'assets=../assets\n',
      'source=../src\n',
      'build=../build\n',
      'versioncode=1\n',
      'versionname=1.0\n',
      'useslocation=False\n',
-     'aname=dummy_app_name\n']
+     'aname=' + DUMMY_PROJECT_NAME + '\n']
 
+def dummyMeta():
+    """
+    Return dummy meta file for projects without META files
+    """
+    global num_missing_meta
+    num_missing_meta += 1
+    return ['{"name": "' + DUMMY_PROJECT_NAME + '", "modified": ' + str(DUMMY_MODIFIED_TIME) + ', "created": ' + str(DUMMY_CREATED_TIME) + '}']
     
 """
 Given the path to a directory that contains users (dirName) and a file extension (fileType),
@@ -523,6 +555,7 @@ blockTypeDict = {
 }
 
 
+print 'running...'
 
 # Maja's tests
 # cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
@@ -539,9 +572,9 @@ blockTypeDict = {
 # projectToJSONFile('/Users/fturbak/Projects/AppInventor2Stats/data/MIT-tutorials/HelloPurr.aia')
 
 # Benji's Tests
-# print 'running...'
 # dir_small = "/Users/bxie/Documents/ai2_users_long_term_100" #100 users 
 # cleanup(dir_small, 'summary.json')
 # allProjectsToJSONFiles(dir_small, 100)
-# print 'done!'
 
+print 'done!'
+print "Num missing project.properties: {}. Num missing META: {}. Num case mismatches: {}".format(num_missing_properties, num_missing_meta, num_case_mismatches)
