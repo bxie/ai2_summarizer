@@ -16,20 +16,26 @@ import json
 import zipfile
 import xml.etree.ElementTree as ET
 import re
+import datetime
 
 # for dummy project.properties and meta files 
 DUMMY_PROJECT_NAME = '<<dummy_project_name>>'
 DUMMY_USER_NAME = '<<dummy_user_name>>'
 DUMMY_CREATED_TIME = -2
 DUMMY_MODIFIED_TIME = -1
+DUMMY_VERSION = -1
+DUMMY_SCREEN_NAME = '<<dummy_screen_name>>'
 
 num_missing_properties = 0
 num_missing_meta = 0
+num_missing_scm = 0
 num_case_mismatches = 0
 
 def allProjectsToJSONFiles(userDir, numUsers):
     '''assumes cwd contains dir, that contains projects (in .aia, .zip, or as dir)'''
+    print 'Zipping projects...'
     listOfAllProjects = findProjectDirs(userDir, numUsers)
+    print "Done zipping projects..."
     for project in listOfAllProjects:
         if os.path.exists(project):
             projectToJSONFile(project)
@@ -111,7 +117,6 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
         if len(matches) == 1:
             fullFilename = matches[0]
         elif len(matches) == 0:
-            # print names
             if pathlessFilename == 'project.properties': # use dummy properties file if missing
                 return dummyProperties()
             elif pathlessFilename == 'META': #use dummy META file if missing
@@ -122,7 +127,11 @@ def linesFromZippedFile(zippedFile, pathlessFilename):
                 num_case_mismatches += 1
                 fullFilename = matches_alt[0]
             else:
-                raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
+                suffix = pathlessFilename.split('.')[-1]
+                if suffix == 'scm':
+                    return dummyScm()
+                else:
+                    raise RuntimeError("linesFromZippedFile -- no match for file named: " + pathlessFilename)
         else:
             raise RuntimeError("linesFromZippedFile -- multiple matches for file named: "
                          + pathlessFilename
@@ -150,8 +159,9 @@ def findScreenNames(zippedFile):
     names = zippedFile.namelist()
     screens = []
     for file in names:
-        if str(file)[-4:] == '.bky':
-            screens.append(str(file.split('/')[-1])[:-4])
+        name = str(file.split('/')[-1])
+        if name[-4:] == '.bky' and name[0].isalpha():
+            screens.append(name[:-4])
     return screens
 
 def screenToJSON(zippedFile, screenName, projectPath):
@@ -390,6 +400,14 @@ def dummyMeta():
     global num_missing_meta
     num_missing_meta += 1
     return ['{"name": "' + DUMMY_PROJECT_NAME + '", "modified": ' + str(DUMMY_MODIFIED_TIME) + ', "created": ' + str(DUMMY_CREATED_TIME) + '}']
+
+def dummyScm():
+    """
+    Return dummy SCM file for projects with missing SCM files
+    """
+    global num_missing_scm
+    num_missing_scm += 1
+    return '{"YaVersion":"' + str(DUMMY_VERSION) + '","Source":"Form","Properties":{"$Name":"' + str(DUMMY_SCREEN_NAME) + '","$Type":"Form","$Version":"' + str(DUMMY_VERSION) + '","AppName":"' + str(DUMMY_PROJECT_NAME) + '","Title":"' + str(DUMMY_SCREEN_NAME) + '","Uuid":"0"}}\n'
     
 """
 Given the path to a directory that contains users (dirName) and a file extension (fileType),
@@ -556,6 +574,7 @@ blockTypeDict = {
 
 
 print 'running...'
+start = datetime.datetime.now()
 
 # Maja's tests
 # cleanup('/Users/Maja/Documents/AI/Tutorials', 'summary.json')
@@ -572,9 +591,13 @@ print 'running...'
 # projectToJSONFile('/Users/fturbak/Projects/AppInventor2Stats/data/MIT-tutorials/HelloPurr.aia')
 
 # Benji's Tests
-# dir_small = "/Users/bxie/Documents/ai2_users_long_term_100" #100 users 
+# dir_small = "/Users/bxie/Documents/ai2_users_long_term_15k" 
+# N = 15000
 # cleanup(dir_small, 'summary.json')
-# allProjectsToJSONFiles(dir_small, 100)
+# print 'cleanup done.'
+# allProjectsToJSONFiles(dir_small, N)
 
+end = datetime.datetime.now()
 print 'done!'
-print "Num missing project.properties: {}. Num missing META: {}. Num case mismatches: {}".format(num_missing_properties, num_missing_meta, num_case_mismatches)
+print "ran in {}".format(end-start)
+print "Num missing project.properties: {}. Num missing META: {}. Num missing SCM: {}. Num case mismatches: {}".format(num_missing_properties, num_missing_meta, num_missing_scm, num_case_mismatches)
