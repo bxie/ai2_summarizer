@@ -175,9 +175,19 @@ def scmToComponents(zippedFile, scmFileName):
         and scmLines[0].strip() == '#|'
         and scmLines[1].strip() == '$JSON'
         and scmLines[3].strip() == '|#'):
-        data = json.loads(scmLines[2])
+        try:
+            data = json.loads(scmLines[2])
+        except:
+             e = sys.exc_info()[0]
+             data = {u'Properties':{}}
+             print "Error for {}. Error: {}".format(zippedFile.namelist()[0], e)
     else:
-        data = json.loads(scmLines)
+        try:
+            data = json.loads(scmLines)
+        except:
+             e = sys.exc_info()[0]
+             data = {u'Properties':{}}
+             print "Error for {}. Error: {}".format(zippedFile.namelist()[0], e)
     strings = []
     components = {}
     media = []
@@ -594,7 +604,7 @@ start = datetime.datetime.now()
 # dir_small = "/Users/bxie/Documents/ai2_users_long_term_15k" 
 # N = 15000
 # cleanup(dir_small, 'summary.json')
-# print 'cleanup done.'
+# print 'cleanup done...'
 # allProjectsToJSONFiles(dir_small, N)
 
 end = datetime.datetime.now()
